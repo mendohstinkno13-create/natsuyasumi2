@@ -1,0 +1,318 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { CheckCircle2, RotateCcw, BookOpen } from 'lucide-react';
+
+// ==========================================
+// 1. 型定義＆初期データ
+// ==========================================
+type Subject = 'math' | 'japanese' | 'science' | 'social';
+
+interface SubjectData {
+  id: Subject;
+  name: string;
+  totalPages: number;
+  completedPages: {
+    left: number[];
+    right: number[];
+  };
+  color: {
+    bar: string;
+    badge: string;
+    button: string;
+  };
+}
+
+const INITIAL_SUBJECTS: Record<Subject, SubjectData> = {
+  math: {
+    id: 'math',
+    name: '算数',
+    totalPages: 32,
+    completedPages: { left: [], right: [] },
+    color: {
+      bar: 'bg-blue-500',
+      badge: 'bg-blue-100 text-blue-800 border-blue-200',
+      button: 'bg-blue-600 hover:bg-blue-500 text-white',
+    },
+  },
+  japanese: {
+    id: 'japanese',
+    name: '国語',
+    totalPages: 32,
+    completedPages: { left: [], right: [] },
+    color: {
+      bar: 'bg-rose-500',
+      badge: 'bg-rose-100 text-rose-800 border-rose-200',
+      button: 'bg-rose-600 hover:bg-rose-500 text-white',
+    },
+  },
+  science: {
+    id: 'science',
+    name: '理科',
+    totalPages: 8,
+    completedPages: { left: [], right: [] },
+    color: {
+      bar: 'bg-emerald-500',
+      badge: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+      button: 'bg-emerald-600 hover:bg-emerald-500 text-white',
+    },
+  },
+  social: {
+    id: 'social',
+    name: '社会',
+    totalPages: 8,
+    completedPages: { left: [], right: [] },
+    color: {
+      bar: 'bg-amber-500',
+      badge: 'bg-amber-100 text-amber-800 border-amber-200',
+      button: 'bg-amber-600 hover:bg-amber-500 text-white',
+    },
+  },
+};
+
+// ==========================================
+// 2. 教科別カードコンポーネント
+// ==========================================
+function SubjectCard({
+  data,
+  onTogglePage,
+}: {
+  data: SubjectData;
+  onTogglePage: (subject: Subject, type: 'left' | 'right', page: number) => void;
+}) {
+  const completedCount =
+    data.completedPages.left.length + data.completedPages.right.length;
+  const progressPercentage = Math.round((completedCount / data.totalPages) * 100);
+  const isCompleted = completedCount === data.totalPages;
+
+  // 理科・社会は片面4ページ、算数・国語は16ページ
+  const maxLeft = data.totalPages === 8 ? 4 : 16;
+  const maxRight = data.totalPages === 8 ? 4 : 16;
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+      {/* タイトル＆進捗バッジ */}
+      <div className="flex justify-between items-center mb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-bold text-lg text-slate-800">{data.name}</h3>
+          <span
+            className={`text-xs px-2.5 py-0.5 rounded-full border font-medium ${data.color.badge}`}
+          >
+            {completedCount} / {data.totalPages} ページ
+          </span>
+        </div>
+        {isCompleted && (
+          <span className="flex items-center gap-1 text-xs font-bold text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+            <CheckCircle2 size={14} /> 完了
+          </span>
+        )}
+      </div>
+
+      {/* プログレスバー */}
+      <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden mb-5">
+        <motion.div
+          className={`h-full rounded-full ${data.color.bar}`}
+          initial={{ width: '0%' }}
+          animate={{ width: `${progressPercentage}%` }}
+          transition={{ duration: 0.3, ease: 'easeOut' }}
+        />
+      </div>
+
+      {/* 左のページ（①〜） */}
+      <div className="mb-4">
+        <p className="text-xs text-slate-500 mb-1.5 font-medium">
+          左のページ（①〜）
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {Array.from({ length: maxLeft }, (_, i) => i + 1).map((page) => {
+            const isDone = data.completedPages.left.includes(page);
+            return (
+              <button
+                key={`left-${page}`}
+                onClick={() => onTogglePage(data.id, 'left', page)}
+                className={`w-8 h-8 rounded-lg font-bold text-xs transition-all flex items-center justify-center ${
+                  isDone
+                    ? 'bg-slate-100 text-slate-400 line-through border border-slate-200'
+                    : `${data.color.button} shadow-sm`
+                }`}
+              >
+                {page}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 右のページ（1〜） */}
+      <div>
+        <p className="text-xs text-slate-500 mb-1.5 font-medium">
+          右のページ（1〜）
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {Array.from({ length: maxRight }, (_, i) => i + 1).map((page) => {
+            const isDone = data.completedPages.right.includes(page);
+            return (
+              <button
+                key={`right-${page}`}
+                onClick={() => onTogglePage(data.id, 'right', page)}
+                className={`w-8 h-8 rounded-lg font-bold text-xs transition-all flex items-center justify-center ${
+                  isDone
+                    ? 'bg-slate-100 text-slate-400 line-through border border-slate-200'
+                    : `${data.color.button} shadow-sm`
+                }`}
+              >
+                {page}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ==========================================
+// 3. メイン画面
+// ==========================================
+export default function Home() {
+  const [subjects, setSubjects] =
+    useState<Record<Subject, SubjectData>>(INITIAL_SUBJECTS);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // LocalStorage から読み込み
+  useEffect(() => {
+    const saved = localStorage.getItem('homework_simple_progress');
+    if (saved) {
+      try {
+        setSubjects(JSON.parse(saved));
+      } catch (e) {
+        console.error('データの読み込みに失敗しました', e);
+      }
+    }
+    setIsLoaded(true);
+  }, []);
+
+  // LocalStorage に保存
+  useEffect(() => {
+    if (isLoaded) {
+      localStorage.setItem('homework_simple_progress', JSON.stringify(subjects));
+    }
+  }, [subjects, isLoaded]);
+
+  // ページの完了/未完了を切り替え（誤タップしても再度押せば元に戻せる仕様）
+  const handleTogglePage = (
+    subject: Subject,
+    type: 'left' | 'right',
+    page: number
+  ) => {
+    setSubjects((prev) => {
+      const currentSubject = prev[subject];
+      const isAlreadyDone = currentSubject.completedPages[type].includes(page);
+
+      const updatedPages = isAlreadyDone
+        ? currentSubject.completedPages[type].filter((p) => p !== page)
+        : [...currentSubject.completedPages[type], page];
+
+      return {
+        ...prev,
+        [subject]: {
+          ...currentSubject,
+          completedPages: {
+            ...currentSubject.completedPages,
+            [type]: updatedPages,
+          },
+        },
+      };
+    });
+  };
+
+  // 全リセット
+  const handleReset = () => {
+    if (window.confirm('チェックをすべてリセットしますか？')) {
+      setSubjects(INITIAL_SUBJECTS);
+      localStorage.removeItem('homework_simple_progress');
+    }
+  };
+
+  if (!isLoaded) return null;
+
+  // 全体の合計を計算
+  const totalPages = Object.values(subjects).reduce(
+    (acc, s) => acc + s.totalPages,
+    0
+  );
+  const completedPages = Object.values(subjects).reduce(
+    (acc, s) =>
+      acc +
+      s.completedPages.left.length +
+      s.completedPages.right.length,
+    0
+  );
+  const totalPercentage = Math.round((completedPages / totalPages) * 100);
+
+  return (
+    <main className="min-h-screen bg-slate-50 text-slate-800 pb-16">
+      {/* ヘッダー */}
+      <header className="bg-white border-b border-slate-200 py-6 px-4 mb-8">
+        <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <BookOpen className="text-blue-600" size={24} />
+              パーフェクト夏 進捗チェック
+            </h1>
+            <p className="text-xs text-slate-500 mt-1">
+              終わったページ番号をタップして記録しよう
+            </p>
+          </div>
+
+          <button
+            onClick={handleReset}
+            className="text-xs text-slate-400 hover:text-rose-500 flex items-center gap-1 transition-colors self-end md:self-center"
+          >
+            <RotateCcw size={14} /> リセット
+          </button>
+        </div>
+      </header>
+
+      {/* 全体の進捗サマリーバー */}
+      <section className="max-w-4xl mx-auto px-4 mb-8">
+        <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+          <div className="flex justify-between items-end mb-2">
+            <div>
+              <span className="text-xs font-semibold text-slate-400 block uppercase tracking-wider">
+                Total Progress
+              </span>
+              <span className="text-2xl font-black text-slate-800">
+                {completedPages}{' '}
+                <span className="text-sm font-normal text-slate-500">
+                  / {totalPages} ページ完了
+                </span>
+              </span>
+            </div>
+            <div className="text-2xl font-black text-blue-600">
+              {totalPercentage}%
+            </div>
+          </div>
+
+          <div className="w-full bg-slate-100 h-4 rounded-full overflow-hidden">
+            <motion.div
+              className="h-full bg-blue-600 rounded-full"
+              initial={{ width: '0%' }}
+              animate={{ width: `${totalPercentage}%` }}
+              transition={{ duration: 0.4, ease: 'easeOut' }}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 各教科のカード（2列グリッド） */}
+      <div className="max-w-4xl mx-auto px-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+        <SubjectCard data={subjects.math} onTogglePage={handleTogglePage} />
+        <SubjectCard data={subjects.japanese} onTogglePage={handleTogglePage} />
+        <SubjectCard data={subjects.science} onTogglePage={handleTogglePage} />
+        <SubjectCard data={subjects.social} onTogglePage={handleTogglePage} />
+      </div>
+    </main>
+  );
+}
