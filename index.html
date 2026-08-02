@@ -5,12 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>夏休み宿題進捗チェック</title>
   
-  <!-- スマートな日本語フォント (Zen Kaku Gothic New) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap" rel="stylesheet">
   
-  <!-- Tailwind CSS (CDN) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -23,25 +21,22 @@
     }
   </script>
   
-  <!-- React 18, ReactDOM 18, Babel (CDN) -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
-  <!-- Framer Motion & Lucide Icons & Confetti (CDN) -->
   <script src="https://unpkg.com/framer-motion@10.16.4/dist/framer-motion.js"></script>
   <script src="https://unpkg.com/lucide@0.292.0/dist/umd/lucide.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
 
   <style>
-    /* ドラッグ中のテキスト選択やスクロールを防止 */
     body {
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
       background-color: #f8fafc;
     }
-    .page-btn { transition: background-color 0.15s ease, transform 0.1s ease; }
+    .page-btn { transition: background-color 0.1s ease, transform 0.1s ease; }
     .page-btn:active { transform: scale(0.9); }
   </style>
 </head>
@@ -50,14 +45,14 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect, useMemo, useCallback } = React;
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
     const { motion, AnimatePresence } = window.Motion;
 
     // ==========================================
-    // 0. 共通ツール（アイコン・効果音・花火・カレンダー日付）
+    // 0. 共通ツール
     // ==========================================
     function Icon({ name, size = 20, className = "" }) {
-      const iconRef = React.useRef(null);
+      const iconRef = useRef(null);
       useEffect(() => {
         if (iconRef.current) {
           iconRef.current.innerHTML = "";
@@ -138,8 +133,8 @@
 
     const getPacerStatus = (completedPages, totalPages = 80) => {
       const today = new Date();
-      const startDate = new Date(today.getFullYear(), 6, 21); // 7/21
-      const endDate = new Date(today.getFullYear(), 7, 25); // 8/25
+      const startDate = new Date(today.getFullYear(), 6, 21);
+      const endDate = new Date(today.getFullYear(), 7, 25);
       const totalDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
       const passedDays = Math.max(0, Math.ceil((today - startDate) / (1000 * 60 * 60 * 24)));
       const targetPagesToday = Math.min(totalPages, Math.round((totalPages / totalDays) * passedDays));
@@ -155,13 +150,12 @@
       return { targetPagesToday, isQuotaMet: completedPages >= targetPagesToday && targetPagesToday > 0, diff, text, color };
     };
 
-    // 丸数字への変換用配列
     const CIRCLE_NUMBERS = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯'];
 
     // ==========================================
-    // 2. 教科カードコンポーネント (丸数字・通常数字両対応、ラベルなし)
+    // 2. 教科カードコンポーネント (ドラッグ＆タップ対応版)
     // ==========================================
-    function SubjectCard({ data, isDragging, setIsDragging, onTogglePage, onSetPageStatus, soundEnabled }) {
+    function SubjectCard({ data, dragModeRef, dragProcessedRef, onSetPageStatus, soundEnabled }) {
       const completedCount = data.completedPages.left.length + data.completedPages.right.length;
       const progressPercentage = Math.round((completedCount / data.totalPages) * 100);
       const isCompleted = completedCount === data.totalPages;
@@ -177,23 +171,39 @@
         return Array.from({ length: max }, (_, i) => i + 1).map((page) => {
           const isDone = data.completedPages[type].includes(page);
           const displayNum = type === 'left' ? (CIRCLE_NUMBERS[page - 1] || page) : page;
+          const key = `${data.id}-${type}-${page}`;
+          
           return (
             <button
-              key={`${type}-${page}`} data-subject={data.id} data-type={type} data-page={page}
-              className={`page-btn w-9 h-9 rounded-xl font-bold text-[13px] flex items-center justify-center border shadow-sm ${
+              key={key} data-subject={data.id} data-type={type} data-page={page}
+              className={`page-btn w-9 h-9 rounded-xl font-bold text-[13px] flex items-center justify-center border shadow-sm select-none touch-none ${
                 isDone ? `${colors.btn} border-transparent` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
               }`}
-              // 修正ポイント：onClickに統一し、onTouchStartを削除しました
-              onClick={() => { 
-                playSound('click', soundEnabled); 
-                onTogglePage(data.id, type, page); 
+              // 新しい統一イベント
+              onPointerDown={(e) => {
+                // 右クリック等を無視
+                if (e.pointerType === 'mouse' && e.button !== 0) return;
+                
+                // タップしたマスの状態に合わせて「塗りつぶす（check）」か「消す（uncheck）」か決定
+                const newMode = isDone ? 'uncheck' : 'check';
+                dragModeRef.current = newMode;
+                
+                // 重複実行を防ぐための記録をリセット
+                dragProcessedRef.current.clear();
+                dragProcessedRef.current.add(key);
+                
+                playSound('click', soundEnabled);
+                onSetPageStatus(data.id, type, page, newMode === 'check');
               }}
-              onMouseDown={() => setIsDragging(true)}
-              onMouseEnter={() => { 
-                if (isDragging && !isDone) { 
-                  playSound('click', soundEnabled); 
-                  onSetPageStatus(data.id, type, page, true); 
-                } 
+              onPointerEnter={() => {
+                // PCマウス等でドラッグして乗った場合の処理
+                if (dragModeRef.current) {
+                  if (!dragProcessedRef.current.has(key)) {
+                    dragProcessedRef.current.add(key);
+                    playSound('click', soundEnabled);
+                    onSetPageStatus(data.id, type, page, dragModeRef.current === 'check');
+                  }
+                }
               }}
             >
               {displayNum}
@@ -229,7 +239,7 @@
     }
 
     // ==========================================
-    // 3. サブ課題コンポーネント
+    // 3. サブ課題コンポーネント (変更なし)
     // ==========================================
     function SubTasksPanel({ subTasks, setSubTasks, soundEnabled }) {
       const toggleArtStep = (index) => {
@@ -245,14 +255,10 @@
         if (field === 'done') playSound('click', soundEnabled);
         setSubTasks(prev => ({ ...prev, books: prev.books.map(b => b.id === id ? { ...b, [field]: value } : b) }));
       };
-
       const addBook = () => {
         playSound('click', soundEnabled);
-        setSubTasks(prev => ({
-          ...prev, books: [...prev.books, { id: Date.now(), title: '', done: false }]
-        }));
+        setSubTasks(prev => ({ ...prev, books: [...prev.books, { id: Date.now(), title: '', done: false }] }));
       };
-
       const removeBook = (id) => {
         setSubTasks(prev => ({ ...prev, books: prev.books.filter(b => b.id !== id) }));
       };
@@ -283,19 +289,15 @@
                 {(subTasks.dailyHabits[type] || []).length} <span className="text-xs font-bold text-slate-400">日完了</span>
               </div>
             </div>
-            
             <div className="grid grid-cols-7 gap-y-2 gap-x-1 text-center">
               {['日','月','火','水','木','金','土'].map(d => <div key={d} className="text-[10px] text-slate-400 font-bold mb-1">{d}</div>)}
               {Array.from({length: new Date(2026, 6, 21).getDay()}).map((_,i) => <div key={`empty-${i}`}/>)}
-              
               {summerDates.map(date => {
                 const dateStr = date.toISOString().split('T')[0];
                 const isDone = (subTasks.dailyHabits[type] || []).includes(dateStr);
                 const isToday = new Date().toISOString().split('T')[0] === dateStr;
                 return (
-                  <button
-                    key={dateStr}
-                    onClick={() => toggleHabit(type, dateStr)}
+                  <button key={dateStr} onClick={() => toggleHabit(type, dateStr)}
                     className={`w-8 h-8 mx-auto rounded-full text-[11px] font-bold transition-all flex items-center justify-center
                       ${isDone ? theme.active : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
                       ${isToday && !isDone ? 'ring-2 ring-amber-400 ring-offset-2' : ''}
@@ -328,7 +330,6 @@
               ))}
             </div>
           </div>
-
           <div className="bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-6 shadow-soft">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-extrabold text-lg text-slate-800 flex items-center gap-2">
@@ -339,7 +340,6 @@
                 計 {subTasks.books.filter(b => b.done).length} 冊 読破！
               </span>
             </div>
-            
             <div className="space-y-3 mb-4">
               {subTasks.books.map((book, idx) => (
                 <div key={book.id} className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm group">
@@ -354,12 +354,10 @@
                 </div>
               ))}
             </div>
-            
             <button onClick={addBook} className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-500 font-bold rounded-2xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
               <Icon name="PlusCircle" size={18} /> 本を追加する
             </button>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {renderCalendar('④ 百人一首の音読', 'Sparkles', 'indigo', 'ondoku')}
             {renderCalendar('⑤ 家のお手伝い', 'HeartHandshake', 'rose', 'help')}
@@ -377,13 +375,15 @@
       const [reward, setReward] = useState('終わったらアイス！');
       const [soundEnabled, setSoundEnabled] = useState(true);
       const [showSettings, setShowSettings] = useState(false);
-      const [activeTab, setActiveTab] = useState('drill'); // 'drill' or 'subtasks'
+      const [activeTab, setActiveTab] = useState('drill');
       const [isLoaded, setIsLoaded] = useState(false);
       
-      const [isDragging, setIsDragging] = useState(false);
       const [showRewardModal, setShowRewardModal] = useState(false);
 
-      // データ読み込み (キーを v6 に一新)
+      // ドラッグ処理用のリファレンス (コンポーネント再描画を起こさずに状態管理)
+      const dragModeRef = useRef(null); // 'check', 'uncheck', or null
+      const dragProcessedRef = useRef(new Set()); // 同じドラッグ内で処理済みのボタンIDを記録
+
       useEffect(() => {
         const sd = localStorage.getItem('hw_v6_subj');
         const st = localStorage.getItem('hw_v6_subt');
@@ -396,7 +396,6 @@
         setIsLoaded(true);
       }, []);
 
-      // データ保存
       useEffect(() => {
         if (!isLoaded) return;
         localStorage.setItem('hw_v6_subj', JSON.stringify(subjects));
@@ -404,15 +403,6 @@
         localStorage.setItem('hw_v6_rew', reward);
         localStorage.setItem('hw_v6_snd', String(soundEnabled));
       }, [subjects, subTasks, reward, soundEnabled, isLoaded]);
-
-      const onTogglePage = useCallback((subject, type, page) => {
-        setSubjects(prev => {
-          const curr = prev[subject];
-          const updated = curr.completedPages[type].includes(page)
-            ? curr.completedPages[type].filter(p => p !== page) : [...curr.completedPages[type], page];
-          return { ...prev, [subject]: { ...curr, completedPages: { ...curr.completedPages, [type]: updated } } };
-        });
-      }, []);
 
       const onSetPageStatus = useCallback((subject, type, page, status) => {
         setSubjects(prev => {
@@ -424,26 +414,48 @@
         });
       }, []);
 
+      // スマホ向け：なぞり入力を監視するグローバルイベント
       useEffect(() => {
         const handleTouchMove = (e) => {
-          if (!isDragging) return;
+          if (!dragModeRef.current) return;
           const touch = e.touches[0];
           const el = document.elementFromPoint(touch.clientX, touch.clientY);
+          
           if (el && el.dataset.page) {
-            e.preventDefault();
-            onSetPageStatus(el.dataset.subject, el.dataset.type, parseInt(el.dataset.page, 10), true);
+            e.preventDefault(); // なぞり中の画面スクロールを防止
+            const subject = el.dataset.subject;
+            const type = el.dataset.type;
+            const page = parseInt(el.dataset.page, 10);
+            const key = `${subject}-${type}-${page}`;
+            
+            // まだこのドラッグで処理していないボタンなら実行
+            if (!dragProcessedRef.current.has(key)) {
+              dragProcessedRef.current.add(key);
+              playSound('click', soundEnabled);
+              onSetPageStatus(subject, type, page, dragModeRef.current === 'check');
+            }
           }
         };
-        const handleEnd = () => setIsDragging(false);
+
+        const handleEnd = () => {
+          dragModeRef.current = null;
+          dragProcessedRef.current.clear();
+        };
+
         window.addEventListener('touchmove', handleTouchMove, { passive: false });
         window.addEventListener('touchend', handleEnd);
         window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('pointerup', handleEnd);
+        window.addEventListener('touchcancel', handleEnd);
+
         return () => {
           window.removeEventListener('touchmove', handleTouchMove);
           window.removeEventListener('touchend', handleEnd);
           window.removeEventListener('mouseup', handleEnd);
+          window.removeEventListener('pointerup', handleEnd);
+          window.removeEventListener('touchcancel', handleEnd);
         };
-      }, [isDragging, onSetPageStatus]);
+      }, [onSetPageStatus, soundEnabled]); // soundEnabled を依存配列に追加
 
       const handleExport = () => {
         navigator.clipboard.writeText(JSON.stringify({ subjects, subTasks, reward }));
@@ -558,10 +570,10 @@
             <div className="relative z-20">
               {activeTab === 'drill' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <SubjectCard data={subjects.math} isDragging={isDragging} setIsDragging={setIsDragging} onTogglePage={onTogglePage} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
-                  <SubjectCard data={subjects.japanese} isDragging={isDragging} setIsDragging={setIsDragging} onTogglePage={onTogglePage} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
-                  <SubjectCard data={subjects.science} isDragging={isDragging} setIsDragging={setIsDragging} onTogglePage={onTogglePage} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
-                  <SubjectCard data={subjects.social} isDragging={isDragging} setIsDragging={setIsDragging} onTogglePage={onTogglePage} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
+                  <SubjectCard data={subjects.math} dragModeRef={dragModeRef} dragProcessedRef={dragProcessedRef} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
+                  <SubjectCard data={subjects.japanese} dragModeRef={dragModeRef} dragProcessedRef={dragProcessedRef} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
+                  <SubjectCard data={subjects.science} dragModeRef={dragModeRef} dragProcessedRef={dragProcessedRef} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
+                  <SubjectCard data={subjects.social} dragModeRef={dragModeRef} dragProcessedRef={dragProcessedRef} onSetPageStatus={onSetPageStatus} soundEnabled={soundEnabled} />
                 </div>
               ) : (
                 <SubTasksPanel subTasks={subTasks} setSubTasks={setSubTasks} soundEnabled={soundEnabled} />
