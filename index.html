@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>パーフェクト夏 スマート進捗チェッカー 完全版</title>
+  <title>夏休み宿題進捗チェック</title>
   
   <!-- スマートな日本語フォント (Zen Kaku Gothic New) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -39,7 +39,7 @@
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
-      background-color: #f8fafc; /* slate-50 */
+      background-color: #f8fafc;
     }
     .page-btn { transition: background-color 0.15s ease, transform 0.1s ease; }
     .page-btn:active { transform: scale(0.9); }
@@ -54,7 +54,7 @@
     const { motion, AnimatePresence } = window.Motion;
 
     // ==========================================
-    // 0. 共通ツール（アイコン・効果音・花火）
+    // 0. 共通ツール（アイコン・効果音・花火・カレンダー日付）
     // ==========================================
     function Icon({ name, size = 20, className = "" }) {
       const iconRef = React.useRef(null);
@@ -64,8 +64,7 @@
           const iconElement = lucide.icons[name];
           if (iconElement) {
             const svg = lucide.createElement(iconElement);
-            svg.setAttribute("width", size);
-            svg.setAttribute("height", size);
+            svg.setAttribute("width", size); svg.setAttribute("height", size);
             if (className) svg.setAttribute("class", className);
             iconRef.current.appendChild(svg);
           }
@@ -78,10 +77,8 @@
       if (!enabled) return;
       try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
+        const osc = ctx.createOscillator(); const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
         if (type === 'click') {
           osc.frequency.setValueAtTime(600, ctx.currentTime);
           osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.05);
@@ -99,11 +96,9 @@
     };
 
     const launchFireworks = () => {
-      const duration = 5 * 1000;
-      const animationEnd = Date.now() + duration;
+      const duration = 5 * 1000; const animationEnd = Date.now() + duration;
       const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
       const randomInRange = (min, max) => Math.random() * (max - min) + min;
-
       const interval = setInterval(function() {
         const timeLeft = animationEnd - Date.now();
         if (timeLeft <= 0) return clearInterval(interval);
@@ -113,14 +108,19 @@
       }, 250);
     };
 
+    const summerDates = [];
+    for (let d = new Date(2026, 6, 21); d <= new Date(2026, 7, 31); d.setDate(d.getDate() + 1)) {
+      summerDates.push(new Date(d));
+    }
+
     // ==========================================
     // 1. データ定義＆ペースメーカー計算
     // ==========================================
     const INITIAL_SUBJECTS = {
-      math: { id: 'math', name: '算数', totalPages: 32, completedPages: { left: [], right: [] }, color: 'indigo' },
-      japanese: { id: 'japanese', name: '国語', totalPages: 32, completedPages: { left: [], right: [] }, color: 'rose' },
-      science: { id: 'science', name: '理科', totalPages: 8, completedPages: { left: [], right: [] }, color: 'teal' },
-      social: { id: 'social', name: '社会', totalPages: 8, completedPages: { left: [], right: [] }, color: 'amber' },
+      math: { id: 'math', name: '算数', totalPages: 16, completedPages: [], color: 'indigo' },
+      japanese: { id: 'japanese', name: '国語', totalPages: 16, completedPages: [], color: 'rose' },
+      science: { id: 'science', name: '理科', totalPages: 4, completedPages: [], color: 'teal' },
+      social: { id: 'social', name: '社会', totalPages: 4, completedPages: [], color: 'amber' },
     };
 
     const INITIAL_SUB_TASKS = {
@@ -132,15 +132,11 @@
           { id: 'card', label: '作品カードにふりかえりを書いて貼る', done: false },
         ]
       },
-      books: [
-        { id: 1, title: '', done: false }, { id: 2, title: '', done: false },
-        { id: 3, title: '', done: false }, { id: 4, title: '', done: false },
-        { id: 5, title: '', done: false },
-      ],
-      dailyHabits: { ondokuCount: 0, helpCount: 0 }
+      books: [{ id: 1, title: '', done: false }],
+      dailyHabits: { ondoku: [], help: [] }
     };
 
-    const getPacerStatus = (completedPages, totalPages = 80) => {
+    const getPacerStatus = (completedPages, totalPages = 40) => {
       const today = new Date();
       const startDate = new Date(today.getFullYear(), 6, 21); // 7/21
       const endDate = new Date(today.getFullYear(), 7, 25); // 8/25
@@ -159,11 +155,14 @@
       return { targetPagesToday, isQuotaMet: completedPages >= targetPagesToday && targetPagesToday > 0, diff, text, color };
     };
 
+    // 丸数字への変換用配列
+    const CIRCLE_NUMBERS = ['①','②','③','④','⑤','⑥','⑦','⑧','⑨','⑩','⑪','⑫','⑬','⑭','⑮','⑯'];
+
     // ==========================================
-    // 2. 教科カードコンポーネント (なぞり入力対応)
+    // 2. 教科カードコンポーネント (丸数字のみ対応)
     // ==========================================
     function SubjectCard({ data, isDragging, setIsDragging, onTogglePage, onSetPageStatus, soundEnabled }) {
-      const completedCount = data.completedPages.left.length + data.completedPages.right.length;
+      const completedCount = data.completedPages.length;
       const progressPercentage = Math.round((completedCount / data.totalPages) * 100);
       const isCompleted = completedCount === data.totalPages;
 
@@ -174,21 +173,21 @@
         amber: { bg: 'bg-amber-50', text: 'text-amber-700', bar: 'bg-amber-500', btn: 'bg-amber-500 shadow-amber-200 text-white' },
       }[data.color];
 
-      const renderButtons = (type, max) => {
-        return Array.from({ length: max }, (_, i) => i + 1).map((page) => {
-          const isDone = data.completedPages[type].includes(page);
+      const renderButtons = () => {
+        return Array.from({ length: data.totalPages }, (_, i) => i + 1).map((page) => {
+          const isDone = data.completedPages.includes(page);
+          const displayNum = CIRCLE_NUMBERS[page - 1] || page;
           return (
             <button
-              key={`${type}-${page}`}
-              data-subject={data.id} data-type={type} data-page={page}
-              className={`page-btn w-9 h-9 rounded-xl font-bold text-xs flex items-center justify-center border shadow-sm ${
-                isDone ? `${colors.btn} border-transparent` : 'bg-white text-slate-400 border-slate-200 hover:bg-slate-50'
+              key={`page-${page}`} data-subject={data.id} data-page={page}
+              className={`page-btn w-9 h-9 rounded-xl font-bold text-sm flex items-center justify-center border shadow-sm ${
+                isDone ? `${colors.btn} border-transparent` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
               }`}
-              onMouseDown={() => { setIsDragging(true); playSound('click', soundEnabled); onTogglePage(data.id, type, page); }}
-              onMouseEnter={() => { if (isDragging && !isDone) { playSound('click', soundEnabled); onSetPageStatus(data.id, type, page, true); } }}
-              onTouchStart={() => { setIsDragging(true); playSound('click', soundEnabled); onTogglePage(data.id, type, page); }}
+              onMouseDown={() => { setIsDragging(true); playSound('click', soundEnabled); onTogglePage(data.id, page); }}
+              onMouseEnter={() => { if (isDragging && !isDone) { playSound('click', soundEnabled); onSetPageStatus(data.id, page, true); } }}
+              onTouchStart={() => { setIsDragging(true); playSound('click', soundEnabled); onTogglePage(data.id, page); }}
             >
-              {page}
+              {displayNum}
             </button>
           );
         });
@@ -203,28 +202,21 @@
                 <Icon name="Check" size={14} /> 完了
               </span>
             ) : (
-              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">
-                {completedCount} / {data.totalPages}
-              </span>
+              <span className="text-xs font-semibold text-slate-400 bg-slate-100 px-3 py-1 rounded-full">{completedCount} / {data.totalPages}</span>
             )}
           </div>
           <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden mb-6">
             <motion.div className={`h-full rounded-full ${colors.bar}`} initial={{ width: '0%' }} animate={{ width: `${progressPercentage}%` }} transition={{ duration: 0.4, ease: 'easeOut' }} />
           </div>
-          <div className="mb-5">
-            <p className="text-[11px] text-slate-400 font-bold mb-2 tracking-wider">LEFT (①〜)</p>
-            <div className="flex flex-wrap gap-2">{renderButtons('left', data.totalPages === 8 ? 4 : 16)}</div>
-          </div>
-          <div>
-            <p className="text-[11px] text-slate-400 font-bold mb-2 tracking-wider">RIGHT (1〜)</p>
-            <div className="flex flex-wrap gap-2">{renderButtons('right', data.totalPages === 8 ? 4 : 16)}</div>
+          <div className="flex flex-wrap gap-2">
+            {renderButtons()}
           </div>
         </div>
       );
     }
 
     // ==========================================
-    // 3. サブ課題コンポーネント (モダンデザイン版)
+    // 3. サブ課題コンポーネント
     // ==========================================
     function SubTasksPanel({ subTasks, setSubTasks, soundEnabled }) {
       const toggleArtStep = (index) => {
@@ -235,18 +227,78 @@
           return { ...prev, artProject: { ...prev.artProject, steps: newSteps } };
         });
       };
+      
       const updateBook = (id, field, value) => {
         if (field === 'done') playSound('click', soundEnabled);
         setSubTasks(prev => ({ ...prev, books: prev.books.map(b => b.id === id ? { ...b, [field]: value } : b) }));
       };
-      const incrementHabit = (key) => {
+
+      const addBook = () => {
         playSound('click', soundEnabled);
-        setSubTasks(prev => ({ ...prev, dailyHabits: { ...prev.dailyHabits, [key]: prev.dailyHabits[key] + 1 } }));
+        setSubTasks(prev => ({
+          ...prev, books: [...prev.books, { id: Date.now(), title: '', done: false }]
+        }));
+      };
+
+      const removeBook = (id) => {
+        setSubTasks(prev => ({ ...prev, books: prev.books.filter(b => b.id !== id) }));
+      };
+
+      const toggleHabit = (type, dateStr) => {
+        playSound('click', soundEnabled);
+        setSubTasks(prev => {
+          const current = prev.dailyHabits[type] || [];
+          const updated = current.includes(dateStr) ? current.filter(d => d !== dateStr) : [...current, dateStr];
+          return { ...prev, dailyHabits: { ...prev.dailyHabits, [type]: updated } };
+        });
+      };
+
+      const renderCalendar = (title, icon, colorTheme, type) => {
+        const theme = {
+          indigo: { bg: 'bg-indigo-50', text: 'text-indigo-600', active: 'bg-indigo-500 text-white shadow-sm ring-2 ring-indigo-200' },
+          rose: { bg: 'bg-rose-50', text: 'text-rose-600', active: 'bg-rose-500 text-white shadow-sm ring-2 ring-rose-200' }
+        }[colorTheme];
+
+        return (
+          <div className="bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-6 shadow-soft">
+            <div className="flex justify-between items-center mb-5">
+              <h3 className="font-extrabold text-slate-800 flex items-center gap-2">
+                <span className={`${theme.text} ${theme.bg} p-2 rounded-xl`}><Icon name={icon} size={18} /></span>
+                {title}
+              </h3>
+              <div className="text-2xl font-black text-slate-700">
+                {(subTasks.dailyHabits[type] || []).length} <span className="text-xs font-bold text-slate-400">日完了</span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-7 gap-y-2 gap-x-1 text-center">
+              {['日','月','火','水','木','金','土'].map(d => <div key={d} className="text-[10px] text-slate-400 font-bold mb-1">{d}</div>)}
+              {Array.from({length: new Date(2026, 6, 21).getDay()}).map((_,i) => <div key={`empty-${i}`}/>)}
+              
+              {summerDates.map(date => {
+                const dateStr = date.toISOString().split('T')[0];
+                const isDone = (subTasks.dailyHabits[type] || []).includes(dateStr);
+                const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                return (
+                  <button
+                    key={dateStr}
+                    onClick={() => toggleHabit(type, dateStr)}
+                    className={`w-8 h-8 mx-auto rounded-full text-[11px] font-bold transition-all flex items-center justify-center
+                      ${isDone ? theme.active : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}
+                      ${isToday && !isDone ? 'ring-2 ring-amber-400 ring-offset-2' : ''}
+                    `}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
       };
 
       return (
         <div className="space-y-6 relative z-20">
-          {/* 一人一作品 */}
           <div className="bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-6 shadow-soft">
             <h3 className="font-extrabold text-lg text-slate-800 mb-4 flex items-center gap-2">
               <span className="text-amber-500 bg-amber-50 p-2 rounded-xl"><Icon name="Palette" size={20} /></span>
@@ -264,53 +316,40 @@
             </div>
           </div>
 
-          {/* 読書 */}
           <div className="bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-6 shadow-soft">
-            <h3 className="font-extrabold text-lg text-slate-800 mb-4 flex items-center gap-2">
-              <span className="text-blue-500 bg-blue-50 p-2 rounded-xl"><Icon name="BookOpenCheck" size={20} /></span>
-              ③ 読書・5さつ以上
-            </h3>
-            <div className="space-y-3">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-extrabold text-lg text-slate-800 flex items-center gap-2">
+                <span className="text-blue-500 bg-blue-50 p-2 rounded-xl"><Icon name="BookOpenCheck" size={20} /></span>
+                ③ 読書（何冊でも追加OK！）
+              </h3>
+              <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
+                計 {subTasks.books.filter(b => b.done).length} 冊 読破！
+              </span>
+            </div>
+            
+            <div className="space-y-3 mb-4">
               {subTasks.books.map((book, idx) => (
-                <div key={book.id} className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
+                <div key={book.id} className="flex items-center gap-3 bg-white p-2 rounded-2xl border border-slate-100 shadow-sm group">
                   <span className="text-xs font-bold text-slate-400 w-6 text-center">{idx + 1}.</span>
                   <input type="checkbox" checked={book.done} onChange={(e) => updateBook(book.id, 'done', e.target.checked)} className="w-5 h-5 rounded text-blue-500 cursor-pointer" />
                   <input type="text" value={book.title} onChange={(e) => updateBook(book.id, 'title', e.target.value)} placeholder={`読んだ本のタイトル`}
                     className={`flex-1 text-sm bg-transparent px-2 py-2 focus:outline-none focus:border-blue-500 transition-colors ${book.done ? 'line-through text-slate-400' : 'text-slate-800 font-bold'}`}
                   />
+                  <button onClick={() => removeBook(book.id)} className="text-slate-300 hover:text-rose-500 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Icon name="Trash2" size={16} />
+                  </button>
                 </div>
               ))}
             </div>
+            
+            <button onClick={addBook} className="w-full py-3 border-2 border-dashed border-blue-200 text-blue-500 font-bold rounded-2xl hover:bg-blue-50 transition-colors flex items-center justify-center gap-2">
+              <Icon name="PlusCircle" size={18} /> 本を追加する
+            </button>
           </div>
 
-          {/* 音読・お手伝い */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-6 shadow-soft flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-slate-800 flex items-center gap-2 mb-1">
-                  <span className="text-indigo-500 bg-indigo-50 p-2 rounded-xl"><Icon name="Sparkles" size={18} /></span> ④ 音読
-                </h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-3xl font-black text-indigo-600">{subTasks.dailyHabits.ondokuCount}</span>
-                <button onClick={() => incrementHabit('ondokuCount')} className="bg-indigo-500 hover:bg-indigo-600 text-white font-bold px-4 py-2 rounded-xl text-sm shadow-sm active:scale-95 transition-all">
-                  +1 回
-                </button>
-              </div>
-            </div>
-            <div className="bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-6 shadow-soft flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-slate-800 flex items-center gap-2 mb-1">
-                  <span className="text-rose-500 bg-rose-50 p-2 rounded-xl"><Icon name="HeartHandshake" size={18} /></span> ⑤ お手伝い
-                </h3>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-3xl font-black text-rose-600">{subTasks.dailyHabits.helpCount}</span>
-                <button onClick={() => incrementHabit('helpCount')} className="bg-rose-500 hover:bg-rose-600 text-white font-bold px-4 py-2 rounded-xl text-sm shadow-sm active:scale-95 transition-all">
-                  +1 回
-                </button>
-              </div>
-            </div>
+            {renderCalendar('④ 百人一首の音読', 'Sparkles', 'indigo', 'ondoku')}
+            {renderCalendar('⑤ 家のお手伝い', 'HeartHandshake', 'rose', 'help')}
           </div>
         </div>
       );
@@ -320,7 +359,6 @@
     // 4. メインアプリケーション
     // ==========================================
     function App() {
-      // ステート管理 (ドリル、サブ課題、設定類すべて)
       const [subjects, setSubjects] = useState(INITIAL_SUBJECTS);
       const [subTasks, setSubTasks] = useState(INITIAL_SUB_TASKS);
       const [reward, setReward] = useState('終わったらアイス！');
@@ -332,12 +370,12 @@
       const [isDragging, setIsDragging] = useState(false);
       const [showRewardModal, setShowRewardModal] = useState(false);
 
-      // データ読み込み
+      // データ読み込み (キーを v5 に一新)
       useEffect(() => {
-        const sd = localStorage.getItem('hw_perf_subj');
-        const st = localStorage.getItem('hw_perf_subt');
-        const sr = localStorage.getItem('hw_perf_rew');
-        const ss = localStorage.getItem('hw_perf_snd');
+        const sd = localStorage.getItem('hw_v5_subj');
+        const st = localStorage.getItem('hw_v5_subt');
+        const sr = localStorage.getItem('hw_v5_rew');
+        const ss = localStorage.getItem('hw_v5_snd');
         if (sd) try { setSubjects(JSON.parse(sd)); } catch (e) {}
         if (st) try { setSubTasks(JSON.parse(st)); } catch (e) {}
         if (sr) setReward(sr);
@@ -348,33 +386,31 @@
       // データ保存
       useEffect(() => {
         if (!isLoaded) return;
-        localStorage.setItem('hw_perf_subj', JSON.stringify(subjects));
-        localStorage.setItem('hw_perf_subt', JSON.stringify(subTasks));
-        localStorage.setItem('hw_perf_rew', reward);
-        localStorage.setItem('hw_perf_snd', String(soundEnabled));
+        localStorage.setItem('hw_v5_subj', JSON.stringify(subjects));
+        localStorage.setItem('hw_v5_subt', JSON.stringify(subTasks));
+        localStorage.setItem('hw_v5_rew', reward);
+        localStorage.setItem('hw_v5_snd', String(soundEnabled));
       }, [subjects, subTasks, reward, soundEnabled, isLoaded]);
 
-      // なぞり入力ロジック
-      const onTogglePage = useCallback((subject, type, page) => {
+      const onTogglePage = useCallback((subject, page) => {
         setSubjects(prev => {
           const curr = prev[subject];
-          const updated = curr.completedPages[type].includes(page)
-            ? curr.completedPages[type].filter(p => p !== page) : [...curr.completedPages[type], page];
-          return { ...prev, [subject]: { ...curr, completedPages: { ...curr.completedPages, [type]: updated } } };
+          const updated = curr.completedPages.includes(page)
+            ? curr.completedPages.filter(p => p !== page) : [...curr.completedPages, page];
+          return { ...prev, [subject]: { ...curr, completedPages: updated } };
         });
       }, []);
 
-      const onSetPageStatus = useCallback((subject, type, page, status) => {
+      const onSetPageStatus = useCallback((subject, page, status) => {
         setSubjects(prev => {
           const curr = prev[subject];
-          const isDone = curr.completedPages[type].includes(page);
+          const isDone = curr.completedPages.includes(page);
           if (isDone === status) return prev;
-          const updated = status ? [...curr.completedPages[type], page] : curr.completedPages[type].filter(p => p !== page);
-          return { ...prev, [subject]: { ...curr, completedPages: { ...curr.completedPages, [type]: updated } } };
+          const updated = status ? [...curr.completedPages, page] : curr.completedPages.filter(p => p !== page);
+          return { ...prev, [subject]: { ...curr, completedPages: updated } };
         });
       }, []);
 
-      // スマホ・タッチでのなぞりイベント
       useEffect(() => {
         const handleTouchMove = (e) => {
           if (!isDragging) return;
@@ -382,7 +418,7 @@
           const el = document.elementFromPoint(touch.clientX, touch.clientY);
           if (el && el.dataset.page) {
             e.preventDefault();
-            onSetPageStatus(el.dataset.subject, el.dataset.type, parseInt(el.dataset.page, 10), true);
+            onSetPageStatus(el.dataset.subject, parseInt(el.dataset.page, 10), true);
           }
         };
         const handleEnd = () => setIsDragging(false);
@@ -396,7 +432,6 @@
         };
       }, [isDragging, onSetPageStatus]);
 
-      // バックアップ・リセット機能
       const handleExport = () => {
         navigator.clipboard.writeText(JSON.stringify({ subjects, subTasks, reward }));
         alert('データをコピーしました！');
@@ -416,27 +451,25 @@
       const handleReset = () => {
         if (window.confirm('チェックや記録をすべてリセットしますか？')) {
           setSubjects(INITIAL_SUBJECTS); setSubTasks(INITIAL_SUB_TASKS);
-          localStorage.removeItem('hw_perf_subj'); localStorage.removeItem('hw_perf_subt');
+          localStorage.removeItem('hw_v5_subj'); localStorage.removeItem('hw_v5_subt');
           setShowSettings(false);
         }
       };
 
       if (!isLoaded) return null;
 
-      // 進捗計算
       const totalPages = Object.values(subjects).reduce((acc, s) => acc + s.totalPages, 0);
-      const completedPages = Object.values(subjects).reduce((acc, s) => acc + s.completedPages.left.length + s.completedPages.right.length, 0);
+      const completedPages = Object.values(subjects).reduce((acc, s) => acc + s.completedPages.length, 0);
       const totalPercentage = Math.round((completedPages / totalPages) * 100);
       const pacer = getPacerStatus(completedPages, totalPages);
 
       return (
         <main className="min-h-screen pb-24 font-sans text-slate-700 overflow-x-hidden relative">
           
-          {/* ヘッダー */}
           <header className="bg-white/80 backdrop-blur-xl sticky top-0 z-40 shadow-[0_4px_30px_rgba(0,0,0,0.03)] border-b border-white">
             <div className="max-w-4xl mx-auto py-4 px-5 flex justify-between items-center">
               <div>
-                <h1 className="text-lg font-black tracking-tight text-slate-800">パーフェクト夏</h1>
+                <h1 className="text-lg font-black tracking-tight text-slate-800">夏休み宿題進捗チェック</h1>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Progress Checker</p>
               </div>
               <div className="flex items-center gap-2">
@@ -450,7 +483,6 @@
             </div>
           </header>
 
-          {/* 設定メニュー（バックアップ） */}
           <AnimatePresence>
             {showSettings && (
               <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="max-w-4xl mx-auto px-5 overflow-hidden">
@@ -467,8 +499,6 @@
           </AnimatePresence>
 
           <div className="max-w-4xl mx-auto px-5 mt-6 space-y-8">
-            
-            {/* サマリー＆ノルマ表示パネル */}
             <div className="bg-white rounded-[2rem] p-8 shadow-soft relative overflow-hidden">
               <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none"><Icon name="Target" size={120} /></div>
               <div className="relative z-10 flex flex-col md:flex-row justify-between md:items-end gap-6 mb-6">
@@ -496,7 +526,6 @@
               </div>
             </div>
 
-            {/* ご褒美設定 */}
             <div className="px-2 flex items-center gap-3">
               <span className="bg-amber-100 text-amber-500 p-2 rounded-full"><Icon name="Flag" size={16} /></span>
               <input type="text" value={reward} onChange={(e) => setReward(e.target.value)} placeholder="目標のご褒美を入力"
@@ -504,7 +533,6 @@
               />
             </div>
 
-            {/* タブ切り替え (モダンUI) */}
             <div className="flex bg-slate-200/50 p-1.5 rounded-2xl relative z-20">
               <button onClick={() => { playSound('click', soundEnabled); setActiveTab('drill'); }} className={`flex-1 py-3 text-sm font-bold flex items-center justify-center gap-2 rounded-xl transition-all ${activeTab === 'drill' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                 <Icon name="BookOpen" size={18} /> ① ドリル
@@ -514,7 +542,6 @@
               </button>
             </div>
 
-            {/* タブコンテンツ */}
             <div className="relative z-20">
               {activeTab === 'drill' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -528,7 +555,6 @@
               )}
             </div>
             
-            {/* 全クリア記念ボタン */}
             <AnimatePresence>
               {totalPercentage === 100 && (
                 <motion.div initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }} className="pt-8 pb-4 text-center">
@@ -539,10 +565,8 @@
                 </motion.div>
               )}
             </AnimatePresence>
-
           </div>
 
-          {/* ご褒美ポップアップモーダル */}
           <AnimatePresence>
             {showRewardModal && (
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowRewardModal(false)} className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
