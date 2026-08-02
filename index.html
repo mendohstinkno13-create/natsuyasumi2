@@ -183,9 +183,18 @@
               className={`page-btn w-9 h-9 rounded-xl font-bold text-[13px] flex items-center justify-center border shadow-sm ${
                 isDone ? `${colors.btn} border-transparent` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'
               }`}
-              onMouseDown={() => { setIsDragging(true); playSound('click', soundEnabled); onTogglePage(data.id, type, page); }}
-              onMouseEnter={() => { if (isDragging && !isDone) { playSound('click', soundEnabled); onSetPageStatus(data.id, type, page, true); } }}
-              onTouchStart={() => { setIsDragging(true); playSound('click', soundEnabled); onTogglePage(data.id, type, page); }}
+              // 修正ポイント：onClickに統一し、onTouchStartを削除しました
+              onClick={() => { 
+                playSound('click', soundEnabled); 
+                onTogglePage(data.id, type, page); 
+              }}
+              onMouseDown={() => setIsDragging(true)}
+              onMouseEnter={() => { 
+                if (isDragging && !isDone) { 
+                  playSound('click', soundEnabled); 
+                  onSetPageStatus(data.id, type, page, true); 
+                } 
+              }}
             >
               {displayNum}
             </button>
